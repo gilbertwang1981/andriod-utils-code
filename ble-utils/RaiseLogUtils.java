@@ -1,16 +1,12 @@
 package cn.com.kp.ai.utils;
 
-import android.app.Activity;
 import android.util.Log;
-import android.widget.TextView;
 
 import java.math.BigInteger;
 import java.util.List;
 import java.util.Map;
 
-import cn.com.kp.ai.R;
-
-public class RaiseNotifyUtils {
+public class RaiseLogUtils {
     public static void raise(String tag , String message){
         Log.i(tag, message);
     }
