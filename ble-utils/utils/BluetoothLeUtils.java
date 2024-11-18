@@ -23,10 +23,8 @@ import android.widget.TextView;
 
 import androidx.core.app.ActivityCompat;
 
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
@@ -37,6 +35,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import cn.com.kp.ai.R;
+import cn.com.kp.ai.consts.NotifyMessage;
 
 public class BluetoothLeUtils {
     private BluetoothAdapter bluetoothAdapter = null;
@@ -99,7 +98,7 @@ public class BluetoothLeUtils {
             super.onCharacteristicChanged(gatt, characteristic, value);
 
             // 智能手表心率监控
-            if ("00002a37-0000-1000-8000-00805f9b34fb".equalsIgnoreCase(characteristic.getUuid().toString())) {
+            if (NotifyMessage.UUID_C_HEART_RATE.equalsIgnoreCase(characteristic.getUuid().toString())) {
                 try {
                     if (characteristic == null) {
                         return;
@@ -110,11 +109,15 @@ public class BluetoothLeUtils {
                     }
 
                     int v = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT8, 1);
-                    RaiseLogUtils.raise("BluetoothLeUtils", new Integer(v).toString() + " bpm");
+                    Log.i("BluetoothLeUtils", new Integer(v).toString() + " bpm");
                     notifyUtils.updateUIContent(new Integer(v).toString() + " bpm");
                 } catch (Exception e) {
-                    RaiseLogUtils.raise("BluetoothLeUtils", e.getMessage());
+                    Log.e("BluetoothLeUtils", e.getMessage());
                 }
+            } else if (NotifyMessage.UUID_C_WEIGHT.equalsIgnoreCase(characteristic.getUuid().toString())) {
+                Log.i("BluetoothLeUtils" , new String(characteristic.getValue()));
+
+                notifyUtils.updateUIContent("重量为：" + new String(characteristic.getValue()) + "公斤");
             }
         }
 
@@ -124,18 +127,31 @@ public class BluetoothLeUtils {
 
             try {
                 StringBuilder content = new StringBuilder();
-                // 智能手表电池电量
-                if (characteristic.getUuid().toString().equalsIgnoreCase("00002a19-0000-1000-8000-00805f9b34fb")) {
-                    content.append("电池电量：" + RaiseLogUtils.getDecimalString(value) + "%");
+                if (characteristic.getUuid().toString().equalsIgnoreCase(NotifyMessage.UUID_C_BATTERY)) {
+                    content.append("电池电量：" + BluetoothCoderUtils.getDecimalString(value) + "%");
                 } else {
                     content.append(new String(value, "UTF-8"));
                 }
                 notifyUtils.updateUIContent(content.toString());
 
-                RaiseLogUtils.raise("BluetoothLeUtils", content.toString());
+                Log.i("BluetoothLeUtils", content.toString());
             } catch (UnsupportedEncodingException e) {
-                RaiseLogUtils.raise("BluetoothLeUtils", e.getMessage());
+                Log.e("BluetoothLeUtils", e.getMessage());
             }
+        }
+
+        private void dump(Map<String , List<String>> data) {
+            StringBuilder sb = new StringBuilder();
+            for (Map.Entry<String , List<String>> entry : data.entrySet()) {
+                sb.append("服务：" + entry.getKey() + "\n");
+                List<String> charas = entry.getValue();
+                for (String chara : charas) {
+                    sb.append("特征：" + chara + "\n");
+                }
+                sb.append("\n");
+            }
+
+            Log.i("BluetoothLeUtils" , sb.toString());
         }
 
         @Override
@@ -155,7 +171,7 @@ public class BluetoothLeUtils {
                 }
             }
 
-            RaiseLogUtils.raise("BluetoothLeUtils", servicesMap);
+            dump(servicesMap);
         }
 
         @Override
@@ -163,7 +179,7 @@ public class BluetoothLeUtils {
             super.onConnectionStateChange(gatt, status, newState);
 
             if (BluetoothProfile.STATE_CONNECTED == newState) {
-                RaiseLogUtils.raise("BluetoothLeUtils", "连接已经建立,(" + status + "===>" + newState + ")");
+                Log.i("BluetoothLeUtils", "连接已经建立,(" + status + "===>" + newState + ")");
 
                 notifyUtils.updateUIContent("连接已经建立,(" + status + "===>" + newState + ")");
 
@@ -174,7 +190,7 @@ public class BluetoothLeUtils {
             } else {
                 notifyUtils.updateUIContent("连接状态改变,(" + status + "===>" + newState + ")");
 
-                RaiseLogUtils.raise("BluetoothLeUtils", "连接状态改变,(" + status + "===>" + newState + ")");
+                Log.i("BluetoothLeUtils", "连接状态改变,(" + status + "===>" + newState + ")");
             }
         }
     };
@@ -196,12 +212,12 @@ public class BluetoothLeUtils {
                 sb.append("设备名：" + device.getName());
                 sb.append("\t设备地址：" + device.getAddress());
 
-                RaiseLogUtils.raise("BluetoothLeUtils", sb.toString());
+                Log.i("BluetoothLeUtils", sb.toString());
                 notifyUtils.updateUIContent(sb.toString());
 
                 if (device.getName() != null && device.getName().contains(keywords)) {
                     if (!device.createBond()) {
-                        RaiseLogUtils.raise("BluetoothLeUtils", "配对失败");
+                        Log.e("BluetoothLeUtils", "配对失败");
                     } else {
                         matchedDevice = device;
 
@@ -210,7 +226,7 @@ public class BluetoothLeUtils {
 
                         notifyUtils.updateUIContent("配对成功");
 
-                        RaiseLogUtils.raise("BluetoothLeUtils", "配对成功");
+                        Log.i("BluetoothLeUtils", "配对成功");
                     }
                 }
             }
@@ -224,7 +240,7 @@ public class BluetoothLeUtils {
         @Override
         public void onScanFailed(int errorCode) {
             super.onScanFailed(errorCode);
-            RaiseLogUtils.raise("BluetoothLeUtils", "蓝牙扫描失败");
+            Log.e("BluetoothLeUtils", "蓝牙扫描失败");
             notifyUtils.updateUIContent("蓝牙扫描失败");
         }
     };
@@ -248,8 +264,8 @@ public class BluetoothLeUtils {
                         if (ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
                         }
 
-                        if (c.getUuid().toString().equalsIgnoreCase("00002a37-0000-1000-8000-00805f9b34fb")) {
-                            BluetoothGattDescriptor des = c.getDescriptor(UUID.fromString("00002902-0000-1000-8000-00805f9b34fb"));
+                        if (c.getUuid().toString().equalsIgnoreCase(NotifyMessage.UUID_C_HEART_RATE)) {
+                            BluetoothGattDescriptor des = c.getDescriptor(UUID.fromString(NotifyMessage.UUID_D_HEART_RATE_NOTIFY));
                             if (des != null) {
                                 if (enable) {
                                     des.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
@@ -259,20 +275,36 @@ public class BluetoothLeUtils {
                                     currentGatt.setCharacteristicNotification(c, false);
                                 }
                                 currentGatt.writeDescriptor(des);
+                            } else {
+                                Log.e("BluetoothLeUtils" ,"找不到描述符");
+                            }
+                        } else if (c.getUuid().toString().equalsIgnoreCase(NotifyMessage.UUID_C_WEIGHT)) {
+                            BluetoothGattDescriptor des = c.getDescriptor(UUID.fromString(NotifyMessage.UUID_D_WEIGHT_NOTIFY));
+                            if (des != null) {
+                                if (enable) {
+                                    des.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+                                    currentGatt.setCharacteristicNotification(c, true);
+                                } else {
+                                    des.setValue(BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE);
+                                    currentGatt.setCharacteristicNotification(c, false);
+                                }
+                                currentGatt.writeDescriptor(des);
+                            } else {
+                                Log.e("BluetoothLeUtils" ,"找不到描述符");
                             }
                         }
                     } catch (Exception e) {
-                        RaiseLogUtils.raise("BluetoothLeUtils", e.getMessage());
+                        Log.e("BluetoothLeUtils", e.getMessage());
                     }
                 } else {
                     notifyUtils.updateUIContent("特征没找到");
-                    RaiseLogUtils.raise("BluetoothLeUtils", "特征没找到");
+                    Log.e("BluetoothLeUtils", "特征没找到");
                 }
             } catch (Exception e) {
-                RaiseLogUtils.raise("BluetoothLeUtils", e.getMessage());
+                Log.e("BluetoothLeUtils", e.getMessage());
             }
         } else {
-            RaiseLogUtils.raise("BluetoothLeUtils", "服务没找到");
+            Log.e("BluetoothLeUtils", "服务没找到");
         }
     }
 
@@ -290,28 +322,28 @@ public class BluetoothLeUtils {
 
                         if ((c.getProperties() & BluetoothGattCharacteristic.PROPERTY_READ) != 0) {
                             if (!currentGatt.readCharacteristic(c)) {
-                                RaiseLogUtils.raise("BluetoothLeUtils", "特征读取失败");
+                                Log.i("BluetoothLeUtils", "特征读取失败");
                             }
                         } else {
-                            RaiseLogUtils.raise("BluetoothLeUtils", "特征不可读");
+                            Log.i("BluetoothLeUtils", "特征不可读");
                         }
                     } catch (Exception e) {
-                        RaiseLogUtils.raise("BluetoothLeUtils", e.getMessage());
+                        Log.e("BluetoothLeUtils", e.getMessage());
                     }
                 } else {
-                    RaiseLogUtils.raise("BluetoothLeUtils", "特征没找到");
+                    Log.i("BluetoothLeUtils", "特征没找到");
                 }
             } catch (Exception e) {
-                RaiseLogUtils.raise("BluetoothLeUtils", e.getMessage());
+                Log.e("BluetoothLeUtils", e.getMessage());
             }
         } else {
-            RaiseLogUtils.raise("BluetoothLeUtils", "服务没找到");
+            Log.i("BluetoothLeUtils", "服务没找到");
         }
     }
 
     public void createConnection() {
         if (matchedDevice == null) {
-            RaiseLogUtils.raise("BluetoothLeUtils", "设备还未配对");
+            Log.e("BluetoothLeUtils", "设备还未配对");
 
             return;
         }
@@ -375,7 +407,7 @@ public class BluetoothLeUtils {
     public void scanLeDevice() {
         bluetoothLeScanner = bluetoothAdapter.getBluetoothLeScanner();
         if (bluetoothLeScanner == null) {
-            RaiseLogUtils.raise("BluetoothLeUtils", "先打开蓝牙");
+            Log.e("BluetoothLeUtils", "先打开蓝牙");
 
             return;
         }
@@ -400,7 +432,7 @@ public class BluetoothLeUtils {
         if (!scanning) {
             if (ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
             }
-            RaiseLogUtils.raise("BluetoothLeUtils", "开始扫描蓝牙设备");
+            Log.i("BluetoothLeUtils", "开始扫描蓝牙设备");
             notifyUtils.updateUIContent("开始扫描蓝牙设备");
             handler.postDelayed(new Runnable() {
                 @Override
