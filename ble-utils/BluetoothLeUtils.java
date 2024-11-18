@@ -10,6 +10,7 @@ import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothProfile;
+import android.bluetooth.BluetoothSocket;
 import android.bluetooth.le.BluetoothLeScanner;
 import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanResult;
@@ -17,15 +18,22 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Handler;
+import android.util.Log;
 import android.widget.TextView;
 
 import androidx.core.app.ActivityCompat;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import cn.com.kp.ai.R;
@@ -137,7 +145,7 @@ public class BluetoothLeUtils {
             List<BluetoothGattService> services = gatt.getServices();
             for (BluetoothGattService service : services) {
                 List<BluetoothGattCharacteristic> css = service.getCharacteristics();
-                servicesMap.put(service.getUuid().toString() , new ArrayList<>());
+                servicesMap.put(service.getUuid().toString(), new ArrayList<>());
                 if (css != null) {
                     for (BluetoothGattCharacteristic c : css) {
                         if ((c.getProperties() & BluetoothGattCharacteristic.PROPERTY_READ) != 0) {
@@ -228,7 +236,7 @@ public class BluetoothLeUtils {
         this.notifyUtils = new NotifyUtils(uiHandler);
     }
 
-    public void enableNotifyFromDevice(String service , String ch ,boolean enable) {
+    public void enableNotifyFromDevice(String service, String ch, boolean enable) {
         BluetoothGattService s = currentGatt.getService(UUID.fromString(service));
 
         if (s != null) {
@@ -240,7 +248,7 @@ public class BluetoothLeUtils {
                         if (ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
                         }
 
-                        if (c.getUuid().toString().equalsIgnoreCase("00002a37-0000-1000-8000-00805f9b34fb")){
+                        if (c.getUuid().toString().equalsIgnoreCase("00002a37-0000-1000-8000-00805f9b34fb")) {
                             BluetoothGattDescriptor des = c.getDescriptor(UUID.fromString("00002902-0000-1000-8000-00805f9b34fb"));
                             if (des != null) {
                                 if (enable) {
@@ -253,7 +261,7 @@ public class BluetoothLeUtils {
                                 currentGatt.writeDescriptor(des);
                             }
                         }
-                    }catch (Exception e){
+                    } catch (Exception e) {
                         RaiseLogUtils.raise("BluetoothLeUtils", e.getMessage());
                     }
                 } else {
@@ -268,7 +276,7 @@ public class BluetoothLeUtils {
         }
     }
 
-    public void readFromDevice(String service , String ch) {
+    public void readFromDevice(String service, String ch) {
         BluetoothGattService s = currentGatt.getService(UUID.fromString(service));
 
         if (s != null) {
@@ -287,7 +295,7 @@ public class BluetoothLeUtils {
                         } else {
                             RaiseLogUtils.raise("BluetoothLeUtils", "特征不可读");
                         }
-                    }catch (Exception e){
+                    } catch (Exception e) {
                         RaiseLogUtils.raise("BluetoothLeUtils", e.getMessage());
                     }
                 } else {
@@ -312,6 +320,56 @@ public class BluetoothLeUtils {
         }
 
         currentGatt = matchedDevice.connectGatt(context, true, mGattCallback, BluetoothDevice.TRANSPORT_LE);
+    }
+
+    public void readDeviceDataFromSocket() throws IOException {
+        if (!bluetoothAdapter.isEnabled()) {
+            Log.e("BluetoothLeUtils", "请启用蓝牙");
+
+            return;
+        }
+
+        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+        }
+        Set<BluetoothDevice> pairedDevices = bluetoothAdapter.getBondedDevices();
+
+        if (pairedDevices.size() > 0) {
+            for (BluetoothDevice device : pairedDevices) {
+                String deviceName = device.getName();
+                if (deviceName.contains("HC")) {
+                    BluetoothSocket socket = device.createRfcommSocketToServiceRecord(UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"));
+
+                    Log.i("BluetoothLeUtils", "远程设备：" + device.getAddress());
+
+                    socket.connect();
+
+                    Log.i("BluetoothLeUtils", "设备连接成功");
+
+                    InputStream inputStream = socket.getInputStream();
+                    OutputStream outputStream = socket.getOutputStream();
+
+                    String command = "GET_WEIGHT\r\n";
+                    outputStream.write(command.getBytes());
+                    outputStream.flush();
+
+                    StringBuilder result = new StringBuilder();
+                    byte[] buffer = new byte[1024];
+                    int length = 0;
+                    while ((length = inputStream.read(buffer)) != -1) {
+                        result.append(new String(buffer, 0, length));
+                        socket.close();
+                        inputStream.close();
+                        outputStream.close();
+
+                        Log.i("BluetoothLeUtils", new String(buffer, 0, length));
+                        notifyUtils.updateUIContent("当前重量为："+ new String(buffer, 0, length) + " KG");
+                        return;
+                    }
+
+                    break;
+                }
+            }
+        }
     }
 
     public void scanLeDevice() {
